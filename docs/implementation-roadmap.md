@@ -108,8 +108,61 @@ You learn business rules without persistence noise.
 - permission evaluator tests
 - feature flag evaluator tests
 - cross-tenant denial tests
+- platform-admin bypass tests (for approved platform operations only)
 
 > Important: This is where your current feature-flag logic belongs conceptually, but it should be taught with a full roadmap context, not as a random isolated commit.
+
+---
+
+## Phase B.1 — Platform Admin Model (cross-tenant operator)
+
+### Goal
+
+Introduce a **platform-level admin user type** that can perform approved cross-tenant administrative operations (support, incident response, global setup).
+
+### Why
+
+You asked whether there is a plan for “a user who can act as admin for all tenants.”  
+Yes — but this must be explicit and constrained so it doesn’t break tenant isolation accidentally.
+
+### Core rule
+
+- Tenant admins manage only their own tenant.
+- Platform admins are **separate identities/claims**, not normal tenant role assignments.
+- Platform admins can cross tenant boundaries only for whitelisted actions.
+
+### Permission model additions
+
+Add permission namespaces:
+
+- tenant-scoped: `tenant.users.manage`, `cases.create`, ...
+- platform-scoped: `platform.tenants.read`, `platform.memberships.repair`, `platform.flags.override`
+
+Evaluation order for an action:
+
+1. validate actor type (`tenant_user` or `platform_admin`)
+2. if platform action, require platform permission
+3. if tenant action, enforce tenant scope + tenant permission
+4. evaluate feature flag gate when applicable
+
+### Data isolation guardrails
+
+- Every tenant data query still requires explicit tenant id.
+- Platform admin access must pass an elevated policy check + audit reason.
+- No generic “skip tenant filter” flag in repositories.
+
+### Failure scenarios
+
+- platform-admin token used without required platform permission
+- accidental use of platform permission in tenant-only endpoints
+- privileged action executed without audit log metadata
+
+### TDD target
+
+- deny cross-tenant operation for tenant admin
+- allow cross-tenant operation for platform admin with permission
+- deny platform admin when permission missing
+- enforce audit reason requirement for privileged actions
 
 ---
 
@@ -123,12 +176,14 @@ Move in-memory logic to persisted models.
 - Tenant
 - User
 - Membership (user ↔ tenant)
+- PlatformAdminProfile (or `User.isPlatformAdmin` + policy metadata)
 - Role
 - Permission
 - RolePermission
 - UserRole (scoped by tenant)
 - FeatureFlag
 - FeatureFlagOverride (tenant/role/plan)
+- AuditLog (actor type, tenant scope, reason, action, outcome)
 
 ### Why now
 By now you already know required relations from tests and domain rules.
@@ -144,6 +199,7 @@ By now you already know required relations from tests and domain rules.
 - missing tenant filter causing leak
 - stale seed mismatches
 - unique constraints for role names per tenant
+- over-privileged platform admin with broad unmanaged access
 
 ### TDD target
 
@@ -296,4 +352,3 @@ For every feature/change:
 - Wrong first step: fully abstracted architecture with no context.
 
 The fix is not “skip flags/permissions until DB”, but “teach and stage them deliberately”.
-
