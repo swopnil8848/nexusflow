@@ -1,3 +1,4 @@
+<<<<<<< ours
 # NexusFlow Implementation Roadmap (Learning-First)
 
 This document defines **what to build first**, **why**, and **how** in a way that matches your learning goals:
@@ -352,3 +353,297 @@ For every feature/change:
 - Wrong first step: fully abstracted architecture with no context.
 
 The fix is not “skip flags/permissions until DB”, but “teach and stage them deliberately”.
+=======
+=======
+>>>>>>> theirs
+# NexusFlow — Fresh Start Roadmap (Cloud-First, Learn-as-you-build)
+
+> Goal: Start **very small** with a clear path from monolith to microservices.
+
+## 1) What we are building (simple)
+
+NexusFlow is a **multi-tenant SaaS backend** where:
+- users sign up/login,
+- every user belongs to a tenant (workspace/company),
+- tenant-level feature flags can turn features on/off,
+- architecture can later split into microservices.
+
+For now, we will build only:
+1. Auth
+2. API Gateway/BFF layer
+3. Tenant basics
+4. Feature flag basics
+
+No billing, no analytics pipeline, no advanced workflows yet.
+
+---
+
+## 2) Recommended architecture today vs later
+
+### Phase A (Now): Modular Monolith (one repo, one deploy)
+- One NestJS app with modules:
+  - `auth`
+  - `users`
+  - `tenants`
+  - `feature-flags`
+  - `gateway` (BFF/API facade)
+- One database (Postgres).
+- Tenant isolation with `tenant_id` column on tenant-scoped tables.
+
+### Phase B (Later): Microservices (when needed)
+- Keep API Gateway as entry point.
+- First services to split out:
+  1. Auth Service
+  2. Tenant Service
+  3. Feature Flag Service
+- Use message broker (NATS/RabbitMQ) only when cross-service events are needed.
+
+**Why this path:** easiest for learning, lowest cost, still future-proof.
+
+---
+
+## 3) Super-simple cloud stack
+
+- **App hosting:** Render or Railway (easy deploy)
+- **Database:** Neon or Supabase Postgres
+- **Cache (optional now):** Upstash Redis
+- **Auth tokens:** JWT in app initially (later external IdP if needed)
+- **Config/secrets:** platform env vars
+
+Keep it boring and stable at the start.
+
+---
+
+## 4) Exact commands — start monolith now
+
+> Use these commands from your workspace root.
+
+```bash
+# 1) Create a fresh Nest app (if starting new)
+pnpm dlx @nestjs/cli@latest new nexusflow --package-manager pnpm
+
+# 2) Enter project
+cd nexusflow
+
+# 3) Add baseline dependencies
+pnpm add @nestjs/config @nestjs/jwt @nestjs/passport passport passport-jwt bcrypt class-validator class-transformer
+pnpm add @prisma/client
+pnpm add -D prisma @types/passport-jwt @types/bcrypt
+
+# 4) Create first modules only (slow, focused)
+pnpm nest g module auth && pnpm nest g controller auth && pnpm nest g service auth
+pnpm nest g module users && pnpm nest g controller users && pnpm nest g service users
+pnpm nest g module tenants && pnpm nest g controller tenants && pnpm nest g service tenants
+pnpm nest g module feature-flags && pnpm nest g controller feature-flags && pnpm nest g service feature-flags
+pnpm nest g module gateway && pnpm nest g controller gateway && pnpm nest g service gateway
+
+# 5) Setup Prisma
+pnpm prisma init
+```
+
+---
+
+## 5) Data model (minimum)
+
+Create only these core tables first:
+
+1. `tenants`
+   - `id` (uuid)
+   - `name`
+   - `slug`
+   - timestamps
+
+2. `users`
+   - `id` (uuid)
+   - `email` (unique)
+   - `password_hash`
+   - timestamps
+
+3. `memberships`
+   - `id`
+   - `tenant_id`
+   - `user_id`
+   - `role` (`owner`, `admin`, `member`)
+   - unique (`tenant_id`, `user_id`)
+
+4. `feature_flags`
+   - `id`
+   - `tenant_id`
+   - `key`
+   - `enabled` (boolean)
+   - unique (`tenant_id`, `key`)
+
+---
+
+## 6) First API scope only (MVP-0)
+
+### Auth
+- `POST /auth/register`
+- `POST /auth/login`
+- return JWT
+
+### Tenant basics
+- `POST /tenants` (create tenant)
+- `GET /tenants/:id`
+
+### Membership
+- `POST /tenants/:id/members` (invite/add user later; for now direct add)
+
+### Feature flags
+- `POST /tenants/:id/flags`
+- `GET /tenants/:id/flags`
+- `PATCH /tenants/:id/flags/:key`
+
+### Gateway/BFF
+- `GET /me/context` → user + tenant + enabled flags
+
+---
+
+## 7) Multi-tenant rules (keep simple)
+
+- Every request includes tenant context (header like `x-tenant-id` initially).
+- Verify requesting user belongs to that tenant.
+- Always query tenant-scoped data with `WHERE tenant_id = ?`.
+- Add guard/interceptor once and reuse.
+
+---
+
+## 8) Feature flags rules (future-proof)
+
+- Start with **boolean flags per tenant** only.
+- In code, centralize checks in one service:
+  - `isEnabled(tenantId, 'flag_key')`
+- Don’t spread raw DB checks throughout controllers.
+
+---
+
+## 9) Milestones (small batches)
+
+### Week 1
+- Project scaffold
+- Prisma schema + migrations
+- Register/login
+- Tenant create/get
+
+### Week 2
+- Membership checks + tenant guard
+- Feature flag CRUD
+- `/me/context` gateway endpoint
+
+### Week 3
+- Hardening:
+  - DTO validation
+  - basic tests
+  - rate limit on auth
+  - simple audit logging
+
+Only after this decide whether to split microservices.
+
+---
+
+## 10) Migration path to microservices later
+
+When monolith starts hurting (team scale, deploy bottlenecks, heavy traffic):
+
+1. Keep public API contract stable at gateway.
+2. Extract **Auth** as first service.
+3. Extract **Feature Flags** next (low coupling).
+4. Use async events for cross-service updates.
+5. Keep one source of truth per domain.
+
+Do not split too early.
+
+---
+
+## 11) Next command checklist (today)
+
+```bash
+# in current repo
+pnpm add @nestjs/config @nestjs/jwt @nestjs/passport passport passport-jwt bcrypt class-validator class-transformer
+pnpm add @prisma/client
+pnpm add -D prisma @types/passport-jwt @types/bcrypt
+pnpm nest g module auth && pnpm nest g controller auth && pnpm nest g service auth
+pnpm nest g module gateway && pnpm nest g controller gateway && pnpm nest g service gateway
+pnpm nest g module tenants && pnpm nest g module feature-flags
+pnpm prisma init
+```
+
+If you follow only this checklist, you will still be on the right path.
+<<<<<<< ours
+>>>>>>> theirs
+=======
+>>>>>>> theirs
+=======
+# NexusFlow Implementation Roadmap (Local-first)
+
+This roadmap is meant to be reviewed and executed **directly from your local VS Code workspace**.
+
+## Phase 1: Minimal Auth (current scope)
+
+### Goal
+Create a simple auth flow using Prisma with two separate login routes:
+
+- `POST /auth/user/login` (email or phone + password)
+- `POST /auth/admin/login` (email + password)
+
+### Files to review first
+
+- `prisma/schema.prisma`
+- `src/prisma/prisma.service.ts`
+- `src/auth/auth.controller.ts`
+- `src/auth/auth.service.ts`
+- `src/auth/dto/user-login.dto.ts`
+- `src/auth/dto/admin-login.dto.ts`
+
+### Local setup
+
+```bash
+cp .env.example .env
+pnpm install
+pnpm prisma:generate
+pnpm prisma:push
+pnpm prisma:seed
+pnpm start:dev
+```
+
+### Route checks
+
+```bash
+# user login by email
+curl -X POST http://localhost:3000/auth/user/login \
+  -H "Content-Type: application/json" \
+  -d '{"identifier":"user@nexusflow.dev","password":"user1234"}'
+
+# user login by phone
+curl -X POST http://localhost:3000/auth/user/login \
+  -H "Content-Type: application/json" \
+  -d '{"identifier":"+15555550123","password":"user1234"}'
+
+# admin login by email
+curl -X POST http://localhost:3000/auth/admin/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@nexusflow.dev","password":"admin123"}'
+```
+
+## Phase 2: Hardening
+
+- Replace simple token builder with JWT (`@nestjs/jwt`)
+- Add refresh token rotation
+- Add auth guards and role guards
+- Add login attempt rate limiting
+
+## Phase 3: Service split (optional)
+
+- Move auth logic into `apps/auth-service`
+- Keep public routes in `apps/api-gateway`
+- Share DTO/contracts in `libs/common`
+
+## Definition of done for Phase 1
+
+- [ ] Prisma schema applies successfully
+- [ ] Seed creates one admin and one user
+- [ ] User can login with email
+- [ ] User can login with phone
+- [ ] Admin login works only by email
+- [ ] Invalid credentials return 401
+>>>>>>> theirs

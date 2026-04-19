@@ -96,3 +96,29 @@ Nest is an MIT-licensed open source project. It can grow thanks to the sponsors 
 ## License
 
 Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+
+## Auth + Prisma quick start
+
+1. Copy env file:
+   ```bash
+   cp .env.example .env
+   ```
+2. Install deps and generate Prisma client:
+   ```bash
+   pnpm install
+   pnpm prisma:generate
+   pnpm prisma:push
+   ```
+3. Seed demo accounts:
+   ```bash
+   pnpm prisma:seed
+   ```
+4. Run API:
+   ```bash
+   pnpm start:dev
+   ```
+
+### Auth endpoints
+
+- `POST /auth/user/login` with `{ "identifier": "email-or-phone", "password": "..." }`
+- `POST /auth/admin/login` with `{ "email": "...", "password": "..." }`
